@@ -1,0 +1,40 @@
+diff --git a/tools/gen_audio/build.py b/tools/gen_audio/build.py
+index a61b14b..68b3cd3 100644
+--- a/tools/gen_audio/build.py
++++ b/tools/gen_audio/build.py
+@@ -19,6 +19,7 @@ import soundfile
+ 
+ import dsp as d
+ import sfx_plants  # noqa: F401  (registers recipes)
++import sfx_rose_thorn
+ import sfx_world  # noqa: F401
+ import sfx_zombies  # noqa: F401
+ from registry import SOUNDS, SoundSpec
+@@ -96,7 +97,7 @@ def main() -> None:
+ 
+     specs = [spec for spec in SOUNDS if args.only is None or spec.name in args.only]
+     if args.only:
+-        missing = set(args.only) - {spec.name for spec in specs}
++        missing = set(args.only) - {spec.name for spec in specs} - {loop.name for loop in sfx_rose_thorn.LOOPS}
+         if missing:
+             sys.exit(f"unknown sounds: {', '.join(sorted(missing))}")
+     SFX_DIR.mkdir(parents=True, exist_ok=True)
+@@ -107,9 +108,16 @@ def main() -> None:
+             soundfile.write(SFX_DIR / f"{spec.name}_{index}.wav", take.astype(np.float32), d.SAMPLE_RATE, subtype="PCM_16")
+         first_takes[spec.name] = takes[0]
+         report_lines.append(describe(spec.name, takes[0]))
++    loops = [loop for loop in sfx_rose_thorn.LOOPS if args.only is None or loop.name in args.only]
++    for loop in loops:
++        seed = zlib.crc32(f"{loop.name}:0".encode())
++        take = sfx_rose_thorn.master_loop(loop.recipe(np.random.default_rng(seed), loop.period_sec), loop.period_sec)
++        sfx_rose_thorn.write_loop_wav(SFX_DIR / f"{loop.name}_1.wav", take)
++        first_takes[loop.name] = take
++        report_lines.append(describe(loop.name, take) + "  (loop)")
+     if args.only is None:
+-        write_gdscript(SOUNDS)
+-    total_files = sum(spec.variants for spec in specs)
++        write_gdscript([*SOUNDS, *sfx_rose_thorn.LOOPS])
++    total_files = sum(spec.variants for spec in specs) + len(loops)
+     print(f"rendered {len(specs)} sounds, {total_files} files")
+     if args.report:
+         args.report.mkdir(parents=True, exist_ok=True)

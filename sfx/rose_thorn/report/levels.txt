@@ -1,0 +1,6 @@
+rose_thorn_cast               0.73s  peak   -5.9 dB  rms  -20.0 dB  >8k   2.2%
+rose_thorn_hurt               0.43s  peak   -2.8 dB  rms  -19.0 dB  >8k   1.8%
+rose_thorn_upgrade            1.91s  peak   -3.3 dB  rms  -20.2 dB  >8k   1.4%
+rose_thorn_evolve             3.76s  peak   -4.0 dB  rms  -20.0 dB  >8k   0.4%
+rose_thorn_hit                0.46s  peak   -7.4 dB  rms  -19.0 dB  >8k   0.9%
+rose_thorn_fly                1.50s  peak  -13.4 dB  rms  -27.0 dB  >8k   0.6%  loop, seam jump 0.0117 (p99 step 0.0286)
