@@ -48,6 +48,18 @@ Chuỗi `master()` dùng chung sẽ cắt đuôi và fade 10 ms ở cuối, làm
 - Mình không nghe được âm thanh. Mọi đánh giá ở trên dựa trên phổ và số đo; cảm nhận cuối cùng cần chủ dự án nghe thử.
 - Chưa chạy bộ test đầy đủ và bot các màn, vì nhánh có cây này không có ở đây.
 
+## Bản vá đã đưa lên trang beta
+
+Commit `d253ecb` trên `main` của repo này vá thẳng bản build `23ef73e` (chủ dự án cho phép, chỉ phần âm thanh):
+
+- thêm 10 file âm thanh vào `index.pck`;
+- sửa 5 script, chỉ ở chỗ âm thanh (`beta_patch/scripts.patch`): `rose_thorn.gd`, `projectile.gd` (tiếng trúng của đạn hoa hồng), `sfx.gd` (6 id), `plant.gd` và `game.gd` (hàm `_hurt_sound`, `upgrade_sound`, `_evolve_sound` để mỗi cây có tiếng riêng, các cây khác vẫn trả tiếng cũ);
+- đổi con số kích thước pck trong `index.html`.
+
+Mọi file khác trong pck giống hệt từng byte. Test `beta_patch/rose_audio_test.gd` chạy trên pck đã vá với Godot 4.7.2 (`godot --headless --fixed-fps 60 --main-pack index.pck --script rose_audio_test.gd`) và đạt.
+
+**Lần build beta sau từ mã nguồn sẽ ghi đè bản vá này.** Muốn giữ âm thanh, áp `beta_patch/scripts.patch` (hoặc làm theo mục dưới) vào mã nguồn gốc trước khi build lại.
+
 ## Cách gắn vào game (trên nhánh có `rose_thorn.gd`)
 
 1. Chép `sfx_rose_thorn.py` vào `tools/gen_audio/`, áp `build_py.patch` (`git apply sfx/rose_thorn/build_py.patch`, hoặc sửa tay 3 chỗ trong `build.py`), rồi chạy:

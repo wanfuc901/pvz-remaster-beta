@@ -1,0 +1,154 @@
+--- a/scripts/audio/sfx.gd
++++ b/scripts/audio/sfx.gd
+@@ -57,6 +57,12 @@
+ const REFLECT_SHIELD: StringName = &"reflect_shield"
+ const THORNS_STAB: StringName = &"thorns_stab"
+ const FIRE_PEA_SHOOT: StringName = &"fire_pea_shoot"
++const ROSE_THORN_CAST: StringName = &"rose_thorn_cast"
++const ROSE_THORN_HURT: StringName = &"rose_thorn_hurt"
++const ROSE_THORN_UPGRADE: StringName = &"rose_thorn_upgrade"
++const ROSE_THORN_EVOLVE: StringName = &"rose_thorn_evolve"
++const ROSE_THORN_HIT: StringName = &"rose_thorn_hit"
++const ROSE_THORN_FLY: StringName = &"rose_thorn_fly"
+ const STAR_ORA_RUSH: StringName = &"star_ora_rush"
+ const STAR_ORA_SHOUT: StringName = &"star_ora_shout"
+ const STAR_PUNCH: StringName = &"star_punch"
+@@ -154,6 +160,12 @@
+ 	&"reflect_shield": 1, 
+ 	&"thorns_stab": 1, 
+ 	&"fire_pea_shoot": 2, 
++	&"rose_thorn_cast": 2, 
++	&"rose_thorn_hurt": 2, 
++	&"rose_thorn_upgrade": 1, 
++	&"rose_thorn_evolve": 1, 
++	&"rose_thorn_hit": 3, 
++	&"rose_thorn_fly": 1, 
+ 	&"star_ora_rush": 3, 
+ 	&"star_ora_shout": 1, 
+ 	&"star_punch": 3, 
+--- a/scripts/entities/rose_thorn.gd
++++ b/scripts/entities/rose_thorn.gd
+@@ -86,6 +86,13 @@
+ const THORN_BURN_SEC: float = 3.5
+ const PIERCE_COUNT: int = 1
+ const ROSE_COLOR: = Color(0.92, 0.18, 0.3)
++const FLY_LOOP: AudioStream = preload("res://assets/audio/sfx/rose_thorn_fly_1.wav")
++const FLY_LOOP_DB: float = -3.0
++## More orbs humming at once only muddies the mix; extra ones fly silent.
++const FLY_LOOP_LIMIT: int = 3
++const FLY_LOOP_GROUP: StringName = &"rose_thorn_fly_loop"
++const FLY_PAN_STRENGTH: float = 0.6
++const FLY_HEARING_DISTANCE: float = 4000.0
+ 
+ var _skirt: Node2D
+ var _torso: Node2D
+@@ -110,7 +117,19 @@
+ 
+ 
+ func _shoot_sound() -> StringName:
+-	return Sfx.FIRE_PEA_SHOOT
++	return Sfx.ROSE_THORN_CAST
++
++
++func _hurt_sound() -> StringName:
++	return Sfx.ROSE_THORN_HURT
++
++
++func upgrade_sound() -> StringName:
++	return Sfx.ROSE_THORN_UPGRADE
++
++
++func _evolve_sound() -> StringName:
++	return Sfx.ROSE_THORN_EVOLVE
+ 
+ 
+ func _build_rig() -> void :
+@@ -208,6 +227,26 @@
+ 	shot.pierce = PIERCE_COUNT
+ 	shot.impact_size = 1.3
+ 	shot.on_strike = _on_thorn_strike
++	_attach_fly_loop(shot)
++
++
++## The orb hums while it flies. A player parented to the shot is freed with
++## it; the shared Audio voices have no per-sound stop, so a loop there would
++## never end.
++func _attach_fly_loop(shot: Projectile) -> void :
++	if get_tree().get_nodes_in_group(FLY_LOOP_GROUP).size() >= FLY_LOOP_LIMIT:
++		return
++	var hum: = AudioStreamPlayer2D.new()
++	hum.stream = FLY_LOOP
++	hum.bus = &"SFX"
++	hum.volume_db = FLY_LOOP_DB
++	hum.panning_strength = FLY_PAN_STRENGTH
++	hum.max_distance = FLY_HEARING_DISTANCE
++	hum.add_to_group(FLY_LOOP_GROUP)
++	# The shot may not be in the tree yet; a random start keeps two orbs
++	# fired close together from humming in phase.
++	hum.ready.connect(func() -> void: hum.play(randf() * FLY_LOOP.get_length()), CONNECT_ONE_SHOT)
++	shot.add_child(hum)
+ 
+ 
+ 
+--- a/scripts/entities/projectile.gd
++++ b/scripts/entities/projectile.gd
+@@ -27,7 +27,7 @@
+ 	&"seed": {"art": "proj_seed", "pivot": Vector2(16, 16), "sound": &"dandelion_puff", "splat": Color(0.95, 0.95, 0.9)}, 
+ 	&"firework": {"art": "proj_firework", "pivot": Vector2(18, 18), "sound": &"firework_burst", "splat": Color(1.0, 0.45, 0.3)}, 
+ 	&"holy": {"art": "proj_holy", "pivot": Vector2(40, 14), "sound": &"pea_hit", "splat": Color(1.0, 0.95, 0.6)}, 
+-	&"rose_thorn": {"art": "rose_thorn_proj", "pivot": Vector2(30, 30), "sound": &"thorns_stab", "splat": Color(0.9, 0.2, 0.35)}, 
++	&"rose_thorn": {"art": "rose_thorn_proj", "pivot": Vector2(30, 30), "sound": &"rose_thorn_hit", "splat": Color(0.9, 0.2, 0.35)}, 
+ }
+ 
+ 
+--- a/scripts/entities/plant.gd
++++ b/scripts/entities/plant.gd
+@@ -532,10 +532,28 @@
+ 	if _chip_left <= 0.0:
+ 		_chip_left = CHIP_GAP_SEC
+ 		Fx.chips(get_parent(), position + Vector2(0.0, _crown_y() * 0.4), _chip_color())
++		var hurt: = _hurt_sound()
++		if hurt != &"":
++			Sound.play(hurt, position)
+ 	if health <= 0.0:
+ 		die()
+ 
+ 
++## Cry when hit, at most once per chip gap; empty keeps the plant silent.
++func _hurt_sound() -> StringName:
++	return &""
++
++
++## Played when a level below evolution is bought.
++func upgrade_sound() -> StringName:
++	return Sfx.UPGRADE_LEVEL
++
++
++## The transformation itself; the path's holy or dark layer plays on top.
++func _evolve_sound() -> StringName:
++	return Sfx.EVOLVE_RISE
++
++
+ func heal(amount: float) -> void :
+ 	if is_dead:
+ 		return
+@@ -685,7 +703,7 @@
+ 	_clear_skin()
+ 	_lay_seal("rune_seal_" + PATH_ART_SUFFIX[path], Color.WHITE, SEAL_SCALE)
+ 	if not is_preview:
+-		Sound.play(Sfx.EVOLVE_RISE, position)
++		Sound.play(_evolve_sound(), position)
+ 		Sound.play(Sfx.EVOLVE_HOLY if path == UpgradePaths.Path.LIGHT else Sfx.EVOLVE_DARK, position)
+ 
+ 
+--- a/scripts/game/game.gd
++++ b/scripts/game/game.gd
+@@ -367,7 +367,7 @@
+ 	plant.apply_upgrade(path)
+ 
+ 	if plant.level < UpgradePaths.MAX_LEVEL:
+-		Sound.play(Sfx.UPGRADE_LEVEL, plant.position)
++		Sound.play(plant.upgrade_sound(), plant.position)
+ 	board.open(plant, _sun_amount, _mechanics_level(), _world_to_screen(plant.position))
+ 
+ 
