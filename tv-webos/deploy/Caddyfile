@@ -1,0 +1,5 @@
+# HTTPS tự động trước TV WebOS (Caddy lấy chứng chỉ Let's Encrypt).
+# Chạy server với TRUST_PROXY=true và PUBLIC_URL=https://tv.example.com
+tv.example.com {
+	reverse_proxy 127.0.0.1:8686
+}

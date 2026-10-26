@@ -1,0 +1,15 @@
+# Render Blueprint cho TV WebOS (thư mục tv-webos/).
+# Render > New > Blueprint > chọn repo này.
+services:
+  - type: web
+    name: tv-webos
+    runtime: docker
+    rootDir: tv-webos
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: TRUST_PROXY
+        value: "true"
+      - key: FILES_READONLY
+        value: "false"

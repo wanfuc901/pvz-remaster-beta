@@ -1,0 +1,16 @@
+# Chạy trên máy tính / NAS trong nhà:  docker compose up -d
+services:
+  tv-webos:
+    build: .
+    container_name: tv-webos
+    restart: unless-stopped
+    ports:
+      - "8686:8686"
+    environment:
+      # Đặt nếu muốn mã QR dùng một địa chỉ cố định (ví dụ http://192.168.1.10:8686).
+      # Để trống: server dùng địa chỉ mà TV đã mở.
+      PUBLIC_URL: ""
+      FILES_READONLY: "false"
+    volumes:
+      - ./media:/data/media   # thư viện media (video, nhạc, ảnh)
+      - ./data:/data/state    # thiết bị đã ghép nối, khóa server
