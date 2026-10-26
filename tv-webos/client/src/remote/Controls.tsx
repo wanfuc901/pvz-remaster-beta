@@ -26,10 +26,16 @@ import {
   Maximize2,
   Minus,
   Send,
+  ClipboardPaste,
+  ExternalLink,
+  Globe,
+  Youtube,
 } from 'lucide-react';
 import { GamepadButton, type NavKey } from '@tvwebos/shared/constants';
+import { firstHttpUrl, parseYouTube } from '@tvwebos/shared/links';
 import { formatDuration } from '../common/format';
-import { send, useRemote, vibrate } from './link';
+import { local } from '../common/storage';
+import { send, showToast, useRemote, vibrate } from './link';
 
 /** Button that repeats while held (D-pad arrows). */
 function HoldButton({ k, className, children, label }: { k: NavKey; className?: string; children: ReactNode; label: string }) {
@@ -413,13 +419,122 @@ export function AppsPanel() {
 
 // ---- Media ----------------------------------------------------------------------
 
-export function MediaPanel() {
+const RECENT_LINKS_KEY = 'tvwebos.remote.links';
+const RECENT_LINKS_LIMIT = 6;
+
+/** A pasted value as a link: a URL inside any text, or a bare domain such as "coccoc.com". */
+function linkFrom(value: string): string | null {
+  const v = value.trim();
+  const found = firstHttpUrl(v);
+  if (found) return found;
+  return /^[\w-]+(\.[\w-]+)+(:\d+)?(\/\S*)?$/.test(v) ? `https://${v}` : null;
+}
+
+function describeLink(url: string): string {
+  const yt = parseYouTube(url);
+  if (yt) return yt.videoId ? 'Video YouTube: phát trong ứng dụng YouTube trên TV' : 'Danh sách phát YouTube';
+  return 'Trang web: mở trong trình duyệt trên TV';
+}
+
+function shortLink(url: string): string {
+  return url.replace(/^https?:\/\/(www\.)?/, '');
+}
+
+/** Paste or share a link and open it on the TV. `autoSend` fires once, for links arriving from the share sheet. */
+export function LinkBox({ initial, autoSend }: { initial?: string | null; autoSend?: boolean }) {
+  const tvOnline = useRemote((s) => s.tvOnline);
+  const [value, setValue] = useState(initial ?? '');
+  const [recent, setRecent] = useState<string[]>(() => local.getJson<string[]>(RECENT_LINKS_KEY, []));
+  const autoSent = useRef(false);
+  const url = linkFrom(value);
+  const canPaste = typeof navigator.clipboard?.readText === 'function';
+
+  const open = (link: string, target: 'auto' | 'tv-browser') => {
+    send({ k: 'open', url: link, target });
+    vibrate(15);
+    showToast(target === 'auto' && parseYouTube(link) ? 'Đã gửi video tới TV' : 'Đã mở liên kết trên TV');
+    const next = [link, ...recent.filter((r) => r !== link)].slice(0, RECENT_LINKS_LIMIT);
+    setRecent(next);
+    local.setJson(RECENT_LINKS_KEY, next);
+  };
+
+  useEffect(() => {
+    if (!autoSend || autoSent.current || !tvOnline || !initial) return;
+    const link = linkFrom(initial);
+    if (!link) return;
+    autoSent.current = true;
+    open(link, 'auto');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend, initial, tvOnline]);
+
+  const paste = async () => {
+    try {
+      setValue(await navigator.clipboard.readText());
+    } catch {
+      showToast('Không đọc được bộ nhớ tạm, hãy nhấn giữ ô bên dưới để dán');
+    }
+  };
+
+  return (
+    <div className="link-box">
+      <div className="link-head">
+        <span>Phát link trên TV</span>
+        <button className="r-btn small" onClick={() => send({ k: 'command', cmd: 'launch-app', arg: 'youtube' })}>
+          <Youtube /> YouTube
+        </button>
+      </div>
+      <div className="link-row">
+        <input
+          className="r-input"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Dán link YouTube hoặc trang web"
+          inputMode="url"
+          autoCapitalize="off"
+          autoCorrect="off"
+          enterKeyHint="go"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && url) open(url, 'auto');
+          }}
+        />
+        {canPaste && (
+          <button className="r-btn icon" aria-label="Dán" onClick={() => void paste()}>
+            <ClipboardPaste />
+          </button>
+        )}
+      </div>
+      {url && <div className="link-kind">{describeLink(url)}</div>}
+      <div className="kb-row">
+        <button className="r-btn primary" disabled={!url} onClick={() => url && open(url, 'auto')}>
+          <Play /> Phát trên TV
+        </button>
+        <button className="r-btn" disabled={!url} onClick={() => url && open(url, 'tv-browser')}>
+          <ExternalLink /> Trình duyệt TV
+        </button>
+      </div>
+      {recent.length > 0 && (
+        <div className="link-recent">
+          {recent.map((r) => (
+            <button key={r} className="link-recent-item" onClick={() => open(r, 'auto')}>
+              {parseYouTube(r) ? <Youtube /> : <Globe />}
+              <span>{shortLink(r)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function MediaPanel({ sharedLink }: { sharedLink?: string | null }) {
   const media = useRemote((s) => s.tv?.media ?? null);
   const [seeking, setSeeking] = useState<number | null>(null);
+  const linkBox = <LinkBox initial={sharedLink} autoSend={!!sharedLink} />;
   if (!media) {
     return (
       <div className="media-panel">
-        <p className="muted">Không có nội dung đang phát. Mở video hoặc nhạc trong Trình phát trên TV.</p>
+        {linkBox}
+        <p className="muted">Không có nội dung đang phát. Gửi một link ở trên, hoặc mở video / nhạc trong Trình phát trên TV.</p>
       </div>
     );
   }
@@ -429,6 +544,7 @@ export function MediaPanel() {
   };
   return (
     <div className="media-panel">
+      {linkBox}
       <div className="media-title">{media.title}</div>
       <div className="media-kind">{media.kind === 'video' ? 'Video' : 'Âm thanh'}</div>
       <input

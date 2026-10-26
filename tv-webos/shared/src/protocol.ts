@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { MEDIA_COMMANDS, NAV_KEYS, SHELL_COMMANDS } from './constants.js';
+import { isHttpUrl, MAX_LINK_LENGTH } from './links.js';
 
 const id = z.string().min(1).max(128);
 const shortText = z.string().max(256);
@@ -36,6 +37,15 @@ export const InputEventSchema = z.discriminatedUnion('k', [
   }),
   z.object({ k: z.literal('command'), cmd: z.enum(SHELL_COMMANDS), arg: shortText.optional() }),
   z.object({ k: z.literal('media'), cmd: z.enum(MEDIA_COMMANDS), value: finite.optional() }),
+  /**
+   * Open a link on the TV. `auto` plays YouTube links in the YouTube app and opens anything else in the
+   * built-in browser; `tv-browser` hands the link to the TV's own web browser.
+   */
+  z.object({
+    k: z.literal('open'),
+    url: z.string().max(MAX_LINK_LENGTH).refine(isHttpUrl, 'Only http(s) links can be opened'),
+    target: z.enum(['auto', 'tv-browser']).optional(),
+  }),
 ]);
 export type InputEvent = z.infer<typeof InputEventSchema>;
 

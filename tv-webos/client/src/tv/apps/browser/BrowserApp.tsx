@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, ExternalLink, Globe, House, RefreshCw } from 'lucide-react';
 import { local } from '../../../common/storage';
 import { platformCaps } from '../../TvApp';
-import { launchTvApp } from '../../platform/webos';
+import { launchTvApp, WEBOS_BROWSER_ID } from '../../platform/webos';
 import { os } from '../../os/store';
 import type { WindowProps } from '../../os/types';
 import { useBack } from '../common';
@@ -17,9 +17,6 @@ const DEFAULT_BOOKMARKS: Bookmark[] = [
   { title: 'Wikipedia', url: 'https://www.wikipedia.org/' },
   { title: 'OpenStreetMap', url: 'https://www.openstreetmap.org/export/embed.html' },
 ];
-
-/** The id of LG's built-in web browser, as used in LG's Application Manager documentation. */
-const WEBOS_BROWSER_ID = 'com.webos.app.browser';
 
 function normalize(input: string): string | null {
   const v = input.trim();

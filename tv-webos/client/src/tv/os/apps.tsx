@@ -3,7 +3,7 @@
  * behind one descriptor type, plus `launch()`.
  */
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
-import { AppWindow, Film, Folder, Globe, Image, LayoutGrid, Settings, Store, FileText, Tv } from 'lucide-react';
+import { AppWindow, Film, Folder, Globe, Image, LayoutGrid, Settings, Store, FileText, Tv, Youtube } from 'lucide-react';
 import { launchTvApp } from '../platform/webos';
 import { os, useOs } from './store';
 import type { AppDescriptor, WindowProps } from './types';
@@ -37,6 +37,17 @@ export const BUILTIN_APPS: BuiltinApp[] = [
     singleton: true,
     startMaximized: true,
     component: lazy(() => import('../apps/media/MediaApp')),
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    kind: 'builtin',
+    color: '#e11d2a',
+    glyph: glyph(Youtube),
+    description: 'Phát video YouTube gửi từ điện thoại',
+    singleton: true,
+    startMaximized: true,
+    component: lazy(() => import('../apps/youtube/YouTubeApp')),
   },
   {
     id: 'gallery',

@@ -169,6 +169,21 @@ describe('pairing', () => {
     tv.close();
   });
 
+  it('relays http(s) links to the TV and refuses other schemes', async () => {
+    const { tv } = await connectTv();
+    const { remote } = await pairRemote(tv);
+    await remote.next('remote.paired');
+    await remote.next('remote.welcome');
+
+    remote.send({ t: 'input', e: { k: 'open', url: 'https://youtu.be/dQw4w9WgXcQ?t=42', target: 'auto' } });
+    expect((await tv.next('tv.input')).e).toEqual([{ k: 'open', url: 'https://youtu.be/dQw4w9WgXcQ?t=42', target: 'auto' }]);
+
+    remote.send({ t: 'input', e: { k: 'open', url: 'javascript:alert(1)' } });
+    expect((await remote.next('error')).code).toBe('bad_request');
+    remote.close();
+    tv.close();
+  });
+
   it('rejects a reused QR token', async () => {
     const { tv } = await connectTv();
     const { remote, code } = await pairRemote(tv);

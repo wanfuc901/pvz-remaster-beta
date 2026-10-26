@@ -132,7 +132,7 @@ export const useOs = create<OsState>((set, get) => ({
   },
   miniapps: [],
   tvApps: [],
-  pinned: local.getJson<string[]>('tvwebos.pinned', ['files', 'media', 'gallery', 'browser', 'store', 'settings']),
+  pinned: local.getJson<string[]>('tvwebos.pinned', ['files', 'media', 'youtube', 'gallery', 'browser', 'store', 'settings']),
   cursorVisible: false,
 
   openWindow: (appId, opts) => {

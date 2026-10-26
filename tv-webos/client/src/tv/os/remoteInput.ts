@@ -10,6 +10,7 @@ import { runCommand } from './shell';
 import { os } from './store';
 import { appDescriptor } from './apps';
 import { applyText, submitText } from './textBridge';
+import { openLink } from './links';
 
 /** Send a key to whatever is focused (forwarded into a mini-app frame when it has focus). */
 export function dispatchNavKey(key: NavKey, action: 'down' | 'up' | 'press'): void {
@@ -111,6 +112,9 @@ export function handleRemoteInput(from: string, events: InputEvent[]): void {
         ctrl?.command(e.cmd, e.value);
         break;
       }
+      case 'open':
+        openLink(e.url, e.target);
+        break;
     }
   }
 }

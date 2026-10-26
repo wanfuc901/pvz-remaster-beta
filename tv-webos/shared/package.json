@@ -17,6 +17,10 @@
     "./miniapp": {
       "types": "./dist/miniapp.d.ts",
       "default": "./dist/miniapp.js"
+    },
+    "./links": {
+      "types": "./dist/links.d.ts",
+      "default": "./dist/links.js"
     }
   },
   "scripts": {

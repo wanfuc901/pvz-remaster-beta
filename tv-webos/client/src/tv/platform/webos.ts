@@ -21,6 +21,14 @@
 
 export type PlatformMode = 'launcher' | 'webos-app' | 'webos-browser' | 'browser';
 
+/** The id of LG's built-in web browser, as used in LG's Application Manager documentation. */
+export const WEBOS_BROWSER_ID = 'com.webos.app.browser';
+/**
+ * The YouTube app on LG TVs. It accepts a `contentTarget` launch parameter with a youtube.com/tv URL;
+ * this is the app's own convention rather than an LG API, so launch failures are reported to the user.
+ */
+export const YOUTUBE_TV_APP_ID = 'youtube.leanback.v4';
+
 export interface Capabilities {
   mode: PlatformMode;
   /** User agent says LG webOS TV. */

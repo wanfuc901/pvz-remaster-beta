@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppWindow, Film, Gamepad2, Keyboard as KeyboardIcon, Menu, MousePointer2, Move, Tv, Upload, X } from 'lucide-react';
+import { firstHttpUrl } from '@tvwebos/shared/links';
 import { getServerBase } from '../common/server';
 import { local } from '../common/storage';
 import { AppsPanel, DPad, Gamepad, Keyboard, MediaPanel } from './Controls';
@@ -246,12 +247,27 @@ function StatusBar({ onMenu }: { onMenu: () => void }) {
   );
 }
 
+const SHARE_PARAMS = ['url', 'text', 'title'];
+
+/**
+ * A link handed over by the phone's share sheet (manifest `share_target`, e.g. "Share" in the YouTube
+ * app). Apps put it in different fields, so all are searched. Read once, then dropped from the address
+ * bar so a reload does not send it again; the pairing token in the fragment is left alone.
+ */
+function takeSharedLink(): string | null {
+  const params = new URLSearchParams(location.search);
+  if (!SHARE_PARAMS.some((p) => params.has(p))) return null;
+  history.replaceState(null, '', location.pathname + location.hash);
+  return firstHttpUrl(SHARE_PARAMS.map((p) => params.get(p) ?? '').join(' '));
+}
+
 export function RemoteApp() {
   const phase = useRemote((s) => s.phase);
   const text = useRemote((s) => s.tv?.text ?? null);
   const hasMedia = useRemote((s) => !!s.tv?.media);
   const toast = useRemote((s) => s.toast);
-  const [tab, setTab] = useState<Tab>((local.get('tvwebos.remote.tab') as Tab) || 'touch');
+  const [sharedLink] = useState(takeSharedLink);
+  const [tab, setTab] = useState<Tab>(() => (sharedLink ? 'media' : (local.get('tvwebos.remote.tab') as Tab) || 'touch'));
   const [menu, setMenu] = useState(false);
   const prevTab = useRef<Tab | null>(null);
 
@@ -294,7 +310,7 @@ export function RemoteApp() {
         {tab === 'keyboard' && <Keyboard />}
         {tab === 'gamepad' && <Gamepad />}
         {tab === 'apps' && <AppsPanel />}
-        {tab === 'media' && <MediaPanel />}
+        {tab === 'media' && <MediaPanel sharedLink={sharedLink} />}
       </main>
       <nav className="r-tabs">
         {TABS.map((t) => (
