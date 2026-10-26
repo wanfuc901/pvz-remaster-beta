@@ -3,18 +3,16 @@
  * (local media becomes the playlist) or, with no arguments, the whole library. Registers a media
  * controller so phone remotes can drive playback and mirror its state.
  */
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { FastForward, ListVideo, Music, Pause, Play, Rewind, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ListVideo, Music } from 'lucide-react';
 import type { MediaCommand } from '@tvwebos/shared/constants';
-import type { TvMediaState } from '@tvwebos/shared';
-import { clamp, formatDuration } from '../../../common/format';
-import { emitMediaChange, registerMedia } from '../../os/bus';
+import { clamp } from '../../../common/format';
 import { indexServer, kindOf, listLocal, localObjectUrl, serverFileWithSiblings, type ServerEntry } from '../../os/files';
-import { navKeyOf } from '../../os/keys';
 import { focusEl } from '../../os/spatialNav';
 import { os, useOs } from '../../os/store';
 import type { WindowProps } from '../../os/types';
 import { useAsync, useBack } from '../common';
+import { handleMediaKey, IDLE_PLAYBACK, PlayerControls, SEEK_STEP_S, useMediaController, usePlayerChrome, type Playback } from './PlayerControls';
 
 type MediaKind = 'video' | 'audio';
 
@@ -31,13 +29,7 @@ interface Playlist {
   start: number;
 }
 
-const SEEK_STEP_S = 10;
-const FAST_STEP_S = 30;
 const RESTART_THRESHOLD_S = 3;
-const CONTROLS_HIDE_MS = 4000;
-const OSD_MS = 1200;
-/** Remotes mirror the playhead; one update per second keeps the socket quiet during playback. */
-const TIME_PUBLISH_STEP_S = 1;
 
 const byName = (a: Track, b: Track) => a.name.localeCompare(b.name, undefined, { numeric: true });
 
@@ -104,37 +96,6 @@ function safePlay(el: HTMLMediaElement, onError: (message: string) => void): voi
   });
 }
 
-function Seekbar({ time, duration, buffered, onSeek }: { time: number; duration: number; buffered: number; onSeek: (t: number) => void }) {
-  const pct = (v: number) => `${duration > 0 ? clamp((v / duration) * 100, 0, 100) : 0}%`;
-  return (
-    <div
-      className="seekbar"
-      role="slider"
-      aria-label="Tua"
-      aria-valuemin={0}
-      aria-valuemax={Math.round(duration)}
-      aria-valuenow={Math.round(time)}
-      tabIndex={0}
-      data-focusable
-      onKeyDown={(e) => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-        e.preventDefault();
-        onSeek(time + (e.key === 'ArrowLeft' ? -SEEK_STEP_S : SEEK_STEP_S));
-      }}
-      onMouseDown={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        if (duration > 0 && r.width > 0) onSeek(((e.clientX - r.left) / r.width) * duration);
-      }}
-    >
-      <div className="track">
-        <div className="buffered" style={{ width: pct(buffered) }} />
-        <div className="fill" style={{ width: pct(time) }} />
-        <div className="knob" style={{ left: pct(time) }} />
-      </div>
-    </div>
-  );
-}
-
 function PlaylistPanel({ tracks, current, onPick }: { tracks: Track[]; current: number; onPick: (i: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -161,17 +122,6 @@ function PlaylistPanel({ tracks, current, onPick }: { tracks: Track[]; current: 
   );
 }
 
-interface Playback {
-  playing: boolean;
-  time: number;
-  duration: number;
-  buffered: number;
-  volume: number;
-  muted: boolean;
-}
-
-const IDLE: Playback = { playing: false, time: 0, duration: 0, buffered: 0, volume: 1, muted: false };
-
 function readPlayback(el: HTMLMediaElement): Playback {
   const end = el.buffered.length ? el.buffered.end(el.buffered.length - 1) : 0;
   return {
@@ -189,14 +139,10 @@ export default function MediaApp({ win }: WindowProps) {
   const mediaRef = useRef<HTMLVideoElement>(null);
   const releases = useRef<Array<() => void>>([]);
   const [index, setIndex] = useState(-1);
-  const [playback, setPlayback] = useState<Playback>(IDLE);
+  const [playback, setPlayback] = useState<Playback>(IDLE_PLAYBACK);
   const [message, setMessage] = useState<string | null>(null);
-  const [osd, setOsd] = useState<string | null>(null);
-  const [controlsShown, setControlsShown] = useState(true);
   const [playlistOpen, setPlaylistOpen] = useState(false);
-  const hideTimer = useRef<number | null>(null);
-  const osdTimer = useRef<number | null>(null);
-  const lastPublishedTime = useRef(-1);
+  const chrome = usePlayerChrome(() => !!mediaRef.current && !mediaRef.current.paused);
 
   const keep = (release: () => void) => releases.current.push(release);
   const path = typeof win.args.path === 'string' ? win.args.path : null;
@@ -226,28 +172,6 @@ export default function MediaApp({ win }: WindowProps) {
     os.get().setWindowTitle(win.id, track ? track.name : 'Trình phát');
   }, [track, win.id]);
 
-  const flashOsd = (text: string) => {
-    setOsd(text);
-    if (osdTimer.current !== null) clearTimeout(osdTimer.current);
-    osdTimer.current = window.setTimeout(() => setOsd(null), OSD_MS);
-  };
-
-  const wakeControls = () => {
-    setControlsShown(true);
-    if (hideTimer.current !== null) clearTimeout(hideTimer.current);
-    hideTimer.current = window.setTimeout(() => {
-      if (mediaRef.current && !mediaRef.current.paused) setControlsShown(false);
-    }, CONTROLS_HIDE_MS);
-  };
-
-  useEffect(
-    () => () => {
-      if (hideTimer.current !== null) clearTimeout(hideTimer.current);
-      if (osdTimer.current !== null) clearTimeout(osdTimer.current);
-    },
-    [],
-  );
-
   const seekTo = (t: number) => {
     const el = mediaRef.current;
     if (!el || !Number.isFinite(el.duration)) return;
@@ -260,20 +184,14 @@ export default function MediaApp({ win }: WindowProps) {
     setIndex((i) => (Math.max(i, 0) + delta + tracks.length) % tracks.length);
   };
 
-  const toggle = () => {
-    const el = mediaRef.current;
-    if (!el || !track) return;
-    if (el.paused || el.ended) safePlay(el, setMessage);
-    else el.pause();
-  };
-
   const command = (cmd: MediaCommand, value?: number) => {
     const el = mediaRef.current;
     if (!el) return;
-    wakeControls();
+    chrome.wake();
     switch (cmd) {
       case 'toggle':
-        return toggle();
+        if (!track) return;
+        return el.paused || el.ended ? safePlay(el, setMessage) : el.pause();
       case 'play':
         return safePlay(el, setMessage);
       case 'pause':
@@ -285,7 +203,7 @@ export default function MediaApp({ win }: WindowProps) {
         return value === undefined ? undefined : seekTo(value);
       case 'seek-by': {
         const by = value ?? SEEK_STEP_S;
-        flashOsd(`${by > 0 ? '+' : ''}${by}s`);
+        chrome.flash(`${by > 0 ? '+' : ''}${by}s`);
         return seekTo(el.currentTime + by);
       }
       case 'next':
@@ -296,59 +214,45 @@ export default function MediaApp({ win }: WindowProps) {
         if (value === undefined) return;
         el.volume = clamp(value, 0, 1);
         el.muted = false;
-        return flashOsd(`Âm lượng ${Math.round(el.volume * 100)}%`);
+        return chrome.flash(`Âm lượng ${Math.round(el.volume * 100)}%`);
       case 'mute':
         el.muted = !el.muted;
-        return flashOsd(el.muted ? 'Tắt tiếng' : 'Bật tiếng');
+        return chrome.flash(el.muted ? 'Tắt tiếng' : 'Bật tiếng');
     }
   };
 
-  // Remotes and media keys always reach the latest closure without re-registering.
-  const commandRef = useRef(command);
-  commandRef.current = command;
-  const stateRef = useRef<TvMediaState | null>(null);
-  stateRef.current = track
-    ? { title: track.name.slice(0, 256), kind: track.kind, playing: playback.playing, time: playback.time, duration: playback.duration, volume: playback.volume, muted: playback.muted }
-    : null;
-
-  useEffect(
-    () =>
-      registerMedia({
-        windowId: win.id,
-        getState: () => stateRef.current,
-        command: (cmd, value) => commandRef.current(cmd, value),
-      }),
-    [win.id],
+  const remote = useMediaController(
+    win.id,
+    track
+      ? { title: track.name.slice(0, 256), kind: track.kind, playing: playback.playing, time: playback.time, duration: playback.duration, volume: playback.volume, muted: playback.muted }
+      : null,
+    command,
   );
 
   // Load and start the chosen track.
   useEffect(() => {
     const el = mediaRef.current;
     if (!el) return;
-    lastPublishedTime.current = -1;
     if (!track) {
       el.removeAttribute('src');
       el.load();
-      setPlayback(IDLE);
-      emitMediaChange();
+      setPlayback(IDLE_PLAYBACK);
+      remote.publish(0, true);
       return;
     }
     setMessage(null);
     el.src = track.url;
     safePlay(el, setMessage);
-    wakeControls();
+    chrome.wake();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track?.key]);
 
-  const sync = (publish: boolean) => {
+  const sync = (force: boolean) => {
     const el = mediaRef.current;
     if (!el) return;
     const next = readPlayback(el);
     setPlayback(next);
-    if (publish || Math.abs(next.time - lastPublishedTime.current) >= TIME_PUBLISH_STEP_S) {
-      lastPublishedTime.current = next.time;
-      emitMediaChange();
-    }
+    remote.publish(next.time, force);
   };
 
   useBack(win.id, () => {
@@ -357,24 +261,16 @@ export default function MediaApp({ win }: WindowProps) {
     return true;
   });
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    wakeControls();
-    const key = navKeyOf(e.nativeEvent);
-    const actions: Partial<Record<string, () => void>> = {
-      MediaPlayPause: toggle,
-      MediaStop: () => command('stop'),
-      MediaRewind: () => command('seek-by', -FAST_STEP_S),
-      MediaFastForward: () => command('seek-by', FAST_STEP_S),
-    };
-    const run = key ? actions[key] : undefined;
-    if (!run) return;
-    e.preventDefault();
-    run();
-  };
-
   return (
     <div className="app">
-      <div className="player" onKeyDown={onKeyDown} onMouseMove={wakeControls}>
+      <div
+        className="player"
+        onKeyDown={(e) => {
+          chrome.wake();
+          handleMediaKey(e, command);
+        }}
+        onMouseMove={chrome.wake}
+      >
         <video
           ref={mediaRef}
           playsInline
@@ -382,7 +278,7 @@ export default function MediaApp({ win }: WindowProps) {
           onPlay={() => sync(true)}
           onPause={() => {
             sync(true);
-            setControlsShown(true);
+            chrome.showControls();
           }}
           onLoadedMetadata={() => sync(true)}
           onTimeUpdate={() => sync(false)}
@@ -390,10 +286,10 @@ export default function MediaApp({ win }: WindowProps) {
           onVolumeChange={() => sync(true)}
           onEnded={() => (tracks.length > 1 ? step(1) : sync(true))}
           onError={() => track && setMessage('Không phát được tệp này: TV không hỗ trợ định dạng hoặc codec, hoặc mất kết nối tới server.')}
-          onClick={toggle}
+          onClick={() => command('toggle')}
         />
         {track?.kind === 'audio' && (
-          <div className="player-audio-art" onClick={toggle}>
+          <div className="player-audio-art" onClick={() => command('toggle')}>
             <Music />
             <h2>{track.name}</h2>
           </div>
@@ -402,42 +298,22 @@ export default function MediaApp({ win }: WindowProps) {
         {list.error && <div className="player-message">{list.error}</div>}
         {message && <div className="player-message">{message}</div>}
         {!list.loading && !list.error && !track && !playlistOpen && <div className="player-message">Chọn một video hoặc bài nhạc trong danh sách phát.</div>}
-        {osd && <div className="player-osd">{osd}</div>}
+        {chrome.osd && <div className="player-osd">{chrome.osd}</div>}
 
-        <div className={`player-controls ${controlsShown || playlistOpen ? '' : 'hidden'}`} data-nav-scope {...(playlistOpen ? { 'data-nav-hidden': '' } : {})}>
-          <div className="player-title">{track?.name ?? 'Trình phát'}</div>
-          <Seekbar time={playback.time} duration={playback.duration} buffered={playback.buffered} onSeek={seekTo} />
-          <div className="player-row">
-            <span className="time">
-              {formatDuration(playback.time)} / {formatDuration(playback.duration)}
-            </span>
-            <div className="player-buttons">
-              <button className="p-btn" onClick={() => command('prev')} title="Bài trước" disabled={!tracks.length}>
-                <SkipBack />
-              </button>
-              <button className="p-btn" onClick={() => command('seek-by', -SEEK_STEP_S)} title={`Lùi ${SEEK_STEP_S} giây`} disabled={!track}>
-                <Rewind />
-              </button>
-              <button className="p-btn main" onClick={toggle} title={playback.playing ? 'Tạm dừng' : 'Phát'} disabled={!track} data-nav-default>
-                {playback.playing ? <Pause /> : <Play />}
-              </button>
-              <button className="p-btn" onClick={() => command('seek-by', SEEK_STEP_S)} title={`Tiến ${SEEK_STEP_S} giây`} disabled={!track}>
-                <FastForward />
-              </button>
-              <button className="p-btn" onClick={() => command('next')} title="Bài tiếp" disabled={!tracks.length}>
-                <SkipForward />
-              </button>
-            </div>
-            <div className="player-buttons">
-              <button className="p-btn" onClick={() => command('mute')} title={playback.muted ? 'Bật tiếng' : 'Tắt tiếng'} disabled={!track}>
-                {playback.muted ? <VolumeX /> : <Volume2 />}
-              </button>
-              <button className="p-btn" onClick={() => setPlaylistOpen(true)} title="Danh sách phát" disabled={!tracks.length}>
-                <ListVideo />
-              </button>
-            </div>
-          </div>
-        </div>
+        <PlayerControls
+          title={track?.name ?? 'Trình phát'}
+          playback={playback}
+          active={!!track}
+          canStep={tracks.length > 0}
+          hidden={!chrome.controlsShown && !playlistOpen}
+          navHidden={playlistOpen}
+          command={command}
+          extra={
+            <button className="p-btn" onClick={() => setPlaylistOpen(true)} title="Danh sách phát" disabled={!tracks.length}>
+              <ListVideo />
+            </button>
+          }
+        />
 
         {playlistOpen && list.data && (
           <PlaylistPanel
