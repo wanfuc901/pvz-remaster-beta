@@ -1,0 +1,13 @@
+{
+  "id": "org.tvwebos.snake",
+  "name": "Rắn săn mồi",
+  "version": "1.0.0",
+  "description": "Trò chơi rắn săn mồi cổ điển. Chơi bằng D-pad của remote TV hoặc tay cầm trên điện thoại.",
+  "author": "TV WebOS",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "color": "#16a34a",
+  "category": "games",
+  "permissions": ["gamepad", "storage"],
+  "minApi": 1
+}

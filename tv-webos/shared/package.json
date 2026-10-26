@@ -13,6 +13,10 @@
     "./constants": {
       "types": "./dist/constants.d.ts",
       "default": "./dist/constants.js"
+    },
+    "./miniapp": {
+      "types": "./dist/miniapp.d.ts",
+      "default": "./dist/miniapp.js"
     }
   },
   "scripts": {
@@ -20,7 +24,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

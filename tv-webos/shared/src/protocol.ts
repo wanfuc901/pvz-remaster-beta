@@ -11,7 +11,7 @@ import { MEDIA_COMMANDS, NAV_KEYS, SHELL_COMMANDS } from './constants.js';
 
 const id = z.string().min(1).max(128);
 const shortText = z.string().max(256);
-const finite = z.number().finite();
+const finite = z.number();
 const delta = finite.min(-5000).max(5000);
 
 // ---------------------------------------------------------------------------
@@ -176,6 +176,8 @@ export interface PairRequest {
 
 export type ServerMessage =
   | { t: 'pong'; ts: number; now: number }
+  /** Fresh bearer token for the HTTP API (sent periodically before the previous one expires). */
+  | { t: 'api.token'; apiToken: string }
   | { t: 'error'; code: import('./constants.js').ErrorCode; message: string; ref?: string }
   // to TV
   | {

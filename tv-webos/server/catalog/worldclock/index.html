@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đồng hồ thế giới</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #04201d; color: #ecfdf5; font-family: Arial, sans-serif; overflow: hidden; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-gap: 2vmin; padding: 3vmin; height: 100%; box-sizing: border-box; }
+  .city { border-radius: 2vmin; background: rgba(255,255,255,0.06); display: flex; flex-direction: column; justify-content: center; align-items: center; border: 0.3vmin solid transparent; }
+  .city:focus { outline: none; border-color: #5eead4; background: rgba(94,234,212,0.12); }
+  .city.home { background: rgba(94,234,212,0.18); }
+  .name { font-size: 3.4vmin; opacity: 0.85; }
+  .time { font-size: 9vmin; font-weight: 300; font-variant-numeric: tabular-nums; margin: 1vmin 0; }
+  .diff { font-size: 2.4vmin; opacity: 0.6; }
+</style>
+</head>
+<body>
+<div class="grid" id="grid"></div>
+<script src="/sdk/tvwebos-sdk.js"></script>
+<script>
+(function () {
+  // Fixed UTC offsets (hours). Daylight saving time is not applied, so DST regions are marked.
+  var CITIES = [
+    ['Hà Nội', 7], ['Tokyo', 9], ['Sydney', 10, true], ['Dubai', 4], ['London', 0, true], ['Paris', 1, true],
+    ['New York', -5, true], ['Los Angeles', -8, true], ['Singapore', 8]
+  ];
+  var home = 0, grid = document.getElementById('grid'), cells = [];
+  CITIES.forEach(function (c, i) {
+    var el = document.createElement('div');
+    el.className = 'city'; el.tabIndex = 0;
+    el.innerHTML = '<div class="name"></div><div class="time"></div><div class="diff"></div>';
+    el.querySelector('.name').textContent = c[0];
+    el.addEventListener('click', function () { home = i; window.tvwebos.storage.set('home', i).catch(function () {}); tick(); });
+    grid.appendChild(el); cells.push(el);
+  });
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function tick() {
+    var now = Date.now();
+    CITIES.forEach(function (c, i) {
+      var d = new Date(now + c[1] * 3600000);
+      cells[i].querySelector('.time').textContent = pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+      var diff = c[1] - CITIES[home][1];
+      cells[i].querySelector('.diff').textContent = (i === home ? 'Thành phố chính' : (diff >= 0 ? '+' : '') + diff + ' giờ') + (c[2] ? ' · chưa tính giờ mùa hè' : '');
+      cells[i].className = 'city' + (i === home ? ' home' : '');
+    });
+  }
+  window.tvwebos.ready.then(function () { return window.tvwebos.storage.get('home'); })
+    .then(function (v) { if (typeof v === 'number' && v < CITIES.length) home = v; tick(); }).catch(function () {});
+  tick(); setInterval(tick, 1000); cells[0].focus();
+})();
+</script>
+</body>
+</html>

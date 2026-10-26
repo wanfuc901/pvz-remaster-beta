@@ -1,0 +1,13 @@
+{
+  "id": "org.tvwebos.worldclock",
+  "name": "Đồng hồ thế giới",
+  "version": "1.0.0",
+  "description": "Giờ hiện tại ở các thành phố lớn, hiển thị lớn để xem từ xa.",
+  "author": "TV WebOS",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "color": "#0f766e",
+  "category": "tools",
+  "permissions": ["storage"],
+  "minApi": 1
+}

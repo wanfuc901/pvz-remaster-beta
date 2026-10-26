@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ghi chú</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1708; color: #fef9c3; font-family: Arial, sans-serif; }
+  .app { display: flex; height: 100%; }
+  .list { width: 32%; padding: 2vmin; box-sizing: border-box; overflow-y: auto; border-right: 0.2vmin solid rgba(255,255,255,0.1); }
+  .editor { flex: 1; display: flex; flex-direction: column; padding: 2vmin; box-sizing: border-box; }
+  button { font: inherit; font-size: 2.6vmin; color: inherit; background: rgba(255,255,255,0.08); border: 0.3vmin solid transparent; border-radius: 1.2vmin; padding: 1.4vmin 2vmin; text-align: left; width: 100%; margin-bottom: 1vmin; }
+  button:focus { outline: none; border-color: #facc15; }
+  button.active { background: rgba(250,204,21,0.2); }
+  .row { display: flex; } .row button { width: auto; margin-right: 1vmin; }
+  input, textarea { font: inherit; color: inherit; background: rgba(0,0,0,0.25); border: 0.3vmin solid rgba(255,255,255,0.15); border-radius: 1.2vmin; padding: 1.4vmin; box-sizing: border-box; width: 100%; }
+  input:focus, textarea:focus { outline: none; border-color: #facc15; }
+  input { font-size: 3.2vmin; margin-bottom: 1.5vmin; }
+  textarea { flex: 1; font-size: 2.8vmin; resize: none; line-height: 1.5; }
+  .meta { font-size: 2vmin; opacity: 0.6; margin-top: 1vmin; }
+  .empty { opacity: 0.6; font-size: 2.6vmin; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="list"><button id="new">+ Ghi chú mới</button><div id="items"></div></div>
+  <div class="editor">
+    <input id="title" placeholder="Tiêu đề">
+    <textarea id="body" placeholder="Nội dung..."></textarea>
+    <div class="row" style="margin-top:1.5vmin"><button id="del">Xóa ghi chú</button></div>
+    <div class="meta" id="meta"></div>
+  </div>
+</div>
+<script src="/sdk/tvwebos-sdk.js"></script>
+<script>
+(function () {
+  var tv = window.tvwebos, notes = [], current = -1, saveTimer = null;
+  var items = document.getElementById('items'), title = document.getElementById('title'), body = document.getElementById('body'), meta = document.getElementById('meta');
+  function render() {
+    items.innerHTML = '';
+    if (!notes.length) { var e = document.createElement('div'); e.className = 'empty'; e.textContent = 'Chưa có ghi chú.'; items.appendChild(e); }
+    notes.forEach(function (n, i) {
+      var b = document.createElement('button');
+      b.textContent = n.title || '(Không tiêu đề)';
+      b.className = i === current ? 'active' : '';
+      b.addEventListener('click', function () { select(i); });
+      items.appendChild(b);
+    });
+    var n = notes[current];
+    title.value = n ? n.title : ''; body.value = n ? n.body : '';
+    title.disabled = body.disabled = !n;
+    meta.textContent = n ? 'Sửa lần cuối: ' + new Date(n.updated).toLocaleString() : 'Chọn hoặc tạo một ghi chú.';
+  }
+  function select(i) { current = i; render(); }
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { tv.storage.set('notes', notes).catch(function (e) { tv.notify('Không lưu được ghi chú', e.message); }); }, 400);
+  }
+  function edit() {
+    var n = notes[current]; if (!n) return;
+    n.title = title.value; n.body = body.value; n.updated = Date.now();
+    var btn = items.children[current]; if (btn) btn.textContent = n.title || '(Không tiêu đề)';
+    save();
+  }
+  title.addEventListener('input', edit); body.addEventListener('input', edit);
+  document.getElementById('new').addEventListener('click', function () {
+    notes.unshift({ title: '', body: '', updated: Date.now() }); current = 0; render(); save(); title.focus();
+  });
+  document.getElementById('del').addEventListener('click', function () {
+    if (current < 0) return; notes.splice(current, 1); current = notes.length ? 0 : -1; render(); save();
+  });
+  tv.ready.then(function () { return tv.storage.get('notes'); }).then(function (v) {
+    if (Array.isArray(v)) notes = v; current = notes.length ? 0 : -1; render();
+  }).catch(function () { render(); });
+  render(); document.getElementById('new').focus();
+})();
+</script>
+</body>
+</html>

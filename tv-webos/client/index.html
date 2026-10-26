@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>TV WebOS</title>
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0f17; color: #eef2f8; font-family: Arial, sans-serif; }
+      .tvwebos-unsupported { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Engines without ES module support (older than Chromium 61) cannot run the desktop. -->
+    <div class="tvwebos-unsupported" id="unsupported">
+      <div style="padding: 10vh 10vw; font-size: 28px; line-height: 1.5">
+        <h1>TV WebOS</h1>
+        <p>Trình duyệt của TV này quá cũ để chạy TV WebOS. Cần LG webOS 5.0 (2020) trở lên, hoặc trình duyệt Chromium 68+.</p>
+      </div>
+    </div>
+    <script nomodule>
+      document.getElementById('unsupported').style.display = 'block';
+    </script>
+    <script type="module" src="./src/tv/main.tsx"></script>
+  </body>
+</html>

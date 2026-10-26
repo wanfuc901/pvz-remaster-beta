@@ -1,0 +1,27 @@
+{
+  "name": "@tvwebos/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tvwebos/shared": "0.1.0",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-legacy": "^7.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "terser": "^5.43.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  }
+}

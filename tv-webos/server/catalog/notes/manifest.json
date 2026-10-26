@@ -1,0 +1,13 @@
+{
+  "id": "org.tvwebos.notes",
+  "name": "Ghi chú",
+  "version": "1.0.0",
+  "description": "Ghi chú nhanh lưu trên TV. Gõ nội dung bằng bàn phím điện thoại.",
+  "author": "TV WebOS",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "color": "#ca8a04",
+  "category": "productivity",
+  "permissions": ["storage", "notifications", "text-input"],
+  "minApi": 1
+}
