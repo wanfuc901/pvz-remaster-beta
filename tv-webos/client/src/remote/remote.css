@@ -670,6 +670,54 @@ svg {
   font-weight: 700;
   text-align: center;
   word-break: break-word;
+  margin-bottom: 8px;
+}
+/* Gesture area over the artwork: the browser must not scroll or zoom while the user swipes on it. */
+.gesture-pad {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  background-color: var(--surface-2);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.gesture-title {
+  padding: 0 16px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.gesture-hint {
+  position: absolute;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.1rem;
+  pointer-events: none;
+}
+.gesture-help {
+  text-align: center;
+  margin: 6px 0 10px;
+}
+.media-volume .r-btn + .r-btn,
+.media-volume .r-range + .r-btn {
+  margin-left: 8px;
+}
+.media-panel > .r-btn.wide {
+  margin-bottom: 8px;
+}
+.media-panel > .link-box {
+  margin-top: 16px;
 }
 .media-kind {
   text-align: center;

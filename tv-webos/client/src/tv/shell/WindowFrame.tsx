@@ -56,7 +56,7 @@ function snapZone(px: number, py: number, area: DOMRect): Snap | 'max' | null {
   return null;
 }
 
-function WindowFrameImpl({ win, focused }: { win: WindowInstance; focused: boolean }) {
+function WindowFrameImpl({ win, focused, fullscreen }: { win: WindowInstance; focused: boolean; fullscreen: boolean }) {
   const app = appDescriptor(win.appId);
   const Content = builtinComponent(win.appId);
   const ref = useRef<HTMLDivElement>(null);
@@ -128,8 +128,8 @@ function WindowFrameImpl({ win, focused }: { win: WindowInstance; focused: boole
     document.addEventListener('mouseup', onUp);
   };
 
-  const cls = ['window', win.mode, focused ? 'focused' : 'inactive', dragging ? 'dragging' : ''].join(' ');
-  const geo = geometry(win);
+  const cls = ['window', win.mode, focused ? 'focused' : 'inactive', dragging ? 'dragging' : '', fullscreen ? 'fullscreen' : ''].join(' ');
+  const geo = fullscreen ? { left: '0', top: '0', width: '100%', height: '100%' } : geometry(win);
 
   return (
     <>

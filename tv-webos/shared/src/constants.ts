@@ -77,7 +77,7 @@ export const SHELL_COMMANDS = [
 ] as const;
 export type ShellCommand = (typeof SHELL_COMMANDS)[number];
 
-export const MEDIA_COMMANDS = ['toggle', 'play', 'pause', 'stop', 'seek', 'seek-by', 'next', 'prev', 'volume', 'mute'] as const;
+export const MEDIA_COMMANDS = ['toggle', 'play', 'pause', 'stop', 'seek', 'seek-by', 'next', 'prev', 'volume', 'mute', 'fullscreen'] as const;
 export type MediaCommand = (typeof MEDIA_COMMANDS)[number];
 
 /** Error codes the server can return. */

@@ -12,7 +12,7 @@ import { focusEl } from '../../os/spatialNav';
 import { os, useOs } from '../../os/store';
 import type { WindowProps } from '../../os/types';
 import { useAsync, useBack } from '../common';
-import { handleMediaKey, IDLE_PLAYBACK, PlayerControls, SEEK_STEP_S, useMediaController, usePlayerChrome, type Playback } from './PlayerControls';
+import { handleMediaKey, IDLE_PLAYBACK, PlayerControls, SEEK_STEP_S, useMediaController, usePlayerChrome, useWindowFullscreen, type Playback } from './PlayerControls';
 
 type MediaKind = 'video' | 'audio';
 
@@ -143,6 +143,7 @@ export default function MediaApp({ win }: WindowProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const chrome = usePlayerChrome(() => !!mediaRef.current && !mediaRef.current.paused);
+  const full = useWindowFullscreen(win.id);
 
   const keep = (release: () => void) => releases.current.push(release);
   const path = typeof win.args.path === 'string' ? win.args.path : null;
@@ -218,13 +219,15 @@ export default function MediaApp({ win }: WindowProps) {
       case 'mute':
         el.muted = !el.muted;
         return chrome.flash(el.muted ? 'Tắt tiếng' : 'Bật tiếng');
+      case 'fullscreen':
+        return full.toggle();
     }
   };
 
   const remote = useMediaController(
     win.id,
     track
-      ? { title: track.name.slice(0, 256), kind: track.kind, playing: playback.playing, time: playback.time, duration: playback.duration, volume: playback.volume, muted: playback.muted }
+      ? { title: track.name.slice(0, 256), kind: track.kind, playing: playback.playing, time: playback.time, duration: playback.duration, volume: playback.volume, muted: playback.muted, fullscreen: full.fullscreen }
       : null,
     command,
   );
@@ -307,6 +310,7 @@ export default function MediaApp({ win }: WindowProps) {
           canStep={tracks.length > 0}
           hidden={!chrome.controlsShown && !playlistOpen}
           navHidden={playlistOpen}
+          fullscreen={full.fullscreen}
           command={command}
           extra={
             <button className="p-btn" onClick={() => setPlaylistOpen(true)} title="Danh sách phát" disabled={!tracks.length}>

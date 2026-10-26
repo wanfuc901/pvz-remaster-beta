@@ -68,7 +68,7 @@ export function runCommand(cmd: ShellCommand, arg?: string): void {
   }
 }
 
-/** Back: close overlay > let the focused app go back > leave a text field > minimise the window. */
+/** Back: close overlay > leave a text field > let the focused app go back > leave full screen > minimise the window. */
 export function goBack(): boolean {
   const s = os.get();
   if (s.overlay !== 'none') {
@@ -83,6 +83,10 @@ export function goBack(): boolean {
   }
   if (s.focusedId) {
     if (runBackHandlers(s.focusedId)) return true;
+    if (s.fullscreenId === s.focusedId) {
+      s.setFullscreen(null);
+      return true;
+    }
     s.minimizeWindow(s.focusedId);
     return true;
   }

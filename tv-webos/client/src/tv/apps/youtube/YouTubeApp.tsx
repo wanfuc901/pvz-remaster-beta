@@ -16,7 +16,7 @@ import { platformCaps } from '../../TvApp';
 import { launchTvApp, YOUTUBE_TV_APP_ID } from '../../platform/webos';
 import { os } from '../../os/store';
 import type { WindowProps } from '../../os/types';
-import { handleMediaKey, IDLE_PLAYBACK, PlayerControls, SEEK_STEP_S, useMediaController, usePlayerChrome, type Playback } from '../media/PlayerControls';
+import { handleMediaKey, IDLE_PLAYBACK, PlayerControls, SEEK_STEP_S, useMediaController, usePlayerChrome, useWindowFullscreen, type Playback } from '../media/PlayerControls';
 
 const EMBED_ORIGIN = 'https://www.youtube-nocookie.com';
 /** The embed only starts reporting after it hears "listening"; YouTube's own API retries the same way. */
@@ -29,6 +29,7 @@ const ERROR_TEXT: Record<number, string> = {
   5: 'Trình duyệt của TV không phát được video này.',
   100: 'Video không tồn tại hoặc đã bị gỡ / để riêng tư.',
 };
+const END_MARGIN_S = 1;
 /** YT.PlayerState values reported by the embed. */
 const PLAYING = 1;
 const BUFFERING = 3;
@@ -81,6 +82,16 @@ function openInTvApp(target: Target | null): Promise<void> {
   return launchTvApp(YOUTUBE_TV_APP_ID, params);
 }
 
+/** Seeking at or past the end makes YouTube finish the video and show its end screen; stop just short. */
+function seekTarget(seconds: number, duration: number): number {
+  return duration > 0 ? clamp(seconds, 0, Math.max(0, duration - END_MARGIN_S)) : Math.max(0, seconds);
+}
+
+/** YouTube's public thumbnail for a video; shown on the phone remote. */
+function thumbnailUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+}
+
 function toPlayback(prev: Playback, info: EmbedInfo): Playback {
   const duration = info.duration ?? prev.duration;
   return {
@@ -128,6 +139,7 @@ export default function YouTubeApp({ win }: WindowProps) {
   const playbackRef = useRef(playback);
   playbackRef.current = playback;
   const chrome = usePlayerChrome(() => playbackRef.current.playing);
+  const full = useWindowFullscreen(win.id);
 
   const post = (func: string, args: unknown[] = []) => {
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args, id: win.id, channel: 'widget' }), EMBED_ORIGIN);
@@ -151,11 +163,11 @@ export default function YouTubeApp({ win }: WindowProps) {
       case 'stop':
         return post('stopVideo');
       case 'seek':
-        return value === undefined ? undefined : post('seekTo', [clamp(value, 0, p.duration || value), true]);
+        return value === undefined ? undefined : post('seekTo', [seekTarget(value, p.duration), true]);
       case 'seek-by': {
         const by = value ?? SEEK_STEP_S;
         chrome.flash(`${by > 0 ? '+' : ''}${by}s`);
-        return post('seekTo', [Math.max(0, p.time + by), true]);
+        return post('seekTo', [seekTarget(p.time + by, p.duration), true]);
       }
       case 'next':
         return post('nextVideo');
@@ -169,12 +181,14 @@ export default function YouTubeApp({ win }: WindowProps) {
       case 'mute':
         post(p.muted ? 'unMute' : 'mute');
         return chrome.flash(p.muted ? 'Bật tiếng' : 'Tắt tiếng');
+      case 'fullscreen':
+        return full.toggle();
     }
   };
 
   const remote = useMediaController(
     win.id,
-    target ? { title: title.slice(0, 256), kind: 'video', playing: playback.playing, time: playback.time, duration: playback.duration, volume: playback.volume, muted: playback.muted } : null,
+    target ? { title: title.slice(0, 256), kind: 'video', playing: playback.playing, time: playback.time, duration: playback.duration, volume: playback.volume, muted: playback.muted, fullscreen: full.fullscreen, art: target.videoId ? thumbnailUrl(target.videoId) : undefined } : null,
     command,
   );
 
@@ -190,6 +204,8 @@ export default function YouTubeApp({ win }: WindowProps) {
     setConnected(false);
     remote.publish(0, true);
     chrome.wake();
+    // A video sent from the phone is meant to be watched: go edge to edge right away.
+    if (target) full.set(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetKey]);
 
@@ -285,6 +301,7 @@ export default function YouTubeApp({ win }: WindowProps) {
           active={connected}
           canStep={!!target.listId}
           hidden={!chrome.controlsShown}
+          fullscreen={full.fullscreen}
           command={command}
           extra={
             canLaunch && (

@@ -106,16 +106,19 @@ export function Desktop() {
   const focusedId = useOs((s) => s.focusedId);
   const overlay = useOs((s) => s.overlay);
   const wallpaper = useOs((s) => s.settings.wallpaper);
+  const fullscreenId = useOs((s) => s.fullscreenId);
   const anyVisible = windows.some((w) => w.mode !== 'minimized');
+  // Full screen only while that window is in front: switching to another window brings the chrome back.
+  const immersiveId = fullscreenId && fullscreenId === focusedId ? fullscreenId : null;
 
   return (
-    <div className="desktop">
+    <div className={`desktop ${immersiveId ? 'immersive' : ''}`}>
       <div className={`wallpaper wp-${wallpaper}`} />
       <div className="safe-area">
         <div className="work-area" data-nav-scope {...(overlay !== 'none' ? { 'data-nav-hidden': '' } : {})}>
           <Home hidden={anyVisible} />
           {windows.map((w) => (
-            <WindowFrame key={w.id} win={w} focused={w.id === focusedId} />
+            <WindowFrame key={w.id} win={w} focused={w.id === focusedId} fullscreen={w.id === immersiveId} />
           ))}
         </div>
         <div {...(overlay !== 'none' ? { 'data-nav-hidden': '' } : {})}>

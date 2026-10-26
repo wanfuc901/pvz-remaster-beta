@@ -30,10 +30,14 @@ import {
   ExternalLink,
   Globe,
   Youtube,
+  Plus,
+  Maximize,
+  Minimize,
 } from 'lucide-react';
 import { GamepadButton, type NavKey } from '@tvwebos/shared/constants';
 import { firstHttpUrl, parseYouTube } from '@tvwebos/shared/links';
-import { formatDuration } from '../common/format';
+import type { TvMediaState } from '@tvwebos/shared';
+import { clamp, formatDuration } from '../common/format';
 import { local } from '../common/storage';
 import { send, showToast, useRemote, vibrate } from './link';
 
@@ -526,6 +530,97 @@ export function LinkBox({ initial, autoSend }: { initial?: string | null; autoSe
   );
 }
 
+const SEEK_STEP_S = 10;
+const VOLUME_STEP = 0.1;
+/** Below this many pixels a touch is a tap, above it a swipe. */
+const SWIPE_MIN_PX = 36;
+/** A vertical swipe across 250 px moves the volume from 0 to 100 %. */
+const VOLUME_PER_PX = 1 / 250;
+const DOUBLE_TAP_MS = 280;
+
+/**
+ * Touch area for eyes-on-the-TV control, laid over the artwork: tap toggles playback, double tap on the
+ * left / right half seeks 10 s, a horizontal swipe seeks 10 s per step, a vertical swipe sets the volume.
+ */
+function GesturePad({ media }: { media: TvMediaState }) {
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const lastTap = useRef<{ at: number; side: -1 | 1 } | null>(null);
+  const tapTimer = useRef<number | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+
+  useEffect(
+    () => () => {
+      if (tapTimer.current !== null) clearTimeout(tapTimer.current);
+    },
+    [],
+  );
+
+  const flash = (text: string) => {
+    setHint(text);
+    window.setTimeout(() => setHint((h) => (h === text ? null : h)), 700);
+  };
+
+  const seekBy = (seconds: number) => {
+    send({ k: 'media', cmd: 'seek-by', value: seconds });
+    vibrate(12);
+    flash(`${seconds > 0 ? '+' : ''}${seconds}s`);
+  };
+
+  const onTap = (side: -1 | 1) => {
+    const now = Date.now();
+    if (lastTap.current && now - lastTap.current.at < DOUBLE_TAP_MS && lastTap.current.side === side) {
+      if (tapTimer.current !== null) clearTimeout(tapTimer.current);
+      tapTimer.current = null;
+      lastTap.current = null;
+      seekBy(side * SEEK_STEP_S);
+      return;
+    }
+    lastTap.current = { at: now, side };
+    // Wait for a possible second tap before toggling, like YouTube's own player.
+    tapTimer.current = window.setTimeout(() => {
+      tapTimer.current = null;
+      send({ k: 'media', cmd: 'toggle' });
+      vibrate(10);
+      flash(media.playing ? 'Tạm dừng' : 'Phát');
+    }, DOUBLE_TAP_MS);
+  };
+
+  return (
+    <div
+      className="gesture-pad"
+      style={media.art ? { backgroundImage: `url("${media.art}")` } : undefined}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        start.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const from = start.current;
+        start.current = null;
+        if (!from) return;
+        const dx = e.clientX - from.x;
+        const dy = e.clientY - from.y;
+        if (Math.abs(dy) > SWIPE_MIN_PX && Math.abs(dy) > Math.abs(dx)) {
+          const volume = clamp((media.muted ? 0 : media.volume) - dy * VOLUME_PER_PX, 0, 1);
+          send({ k: 'media', cmd: 'volume', value: volume });
+          vibrate(8);
+          flash(`Âm lượng ${Math.round(volume * 100)}%`);
+        } else if (Math.abs(dx) > SWIPE_MIN_PX) {
+          seekBy(Math.sign(dx) * SEEK_STEP_S * Math.max(1, Math.round(Math.abs(dx) / (SWIPE_MIN_PX * 2))));
+        } else {
+          const r = e.currentTarget.getBoundingClientRect();
+          onTap(e.clientX - r.left < r.width / 2 ? -1 : 1);
+        }
+      }}
+      onPointerCancel={() => {
+        start.current = null;
+      }}
+    >
+      {!media.art && <div className="gesture-title">{media.title}</div>}
+      {hint && <div className="gesture-hint">{hint}</div>}
+    </div>
+  );
+}
+
 export function MediaPanel({ sharedLink }: { sharedLink?: string | null }) {
   const media = useRemote((s) => s.tv?.media ?? null);
   const [seeking, setSeeking] = useState<number | null>(null);
@@ -538,15 +633,20 @@ export function MediaPanel({ sharedLink }: { sharedLink?: string | null }) {
       </div>
     );
   }
-  const m = (cmd: 'toggle' | 'next' | 'prev' | 'mute', value?: number) => {
+  const m = (cmd: 'toggle' | 'next' | 'prev' | 'mute' | 'fullscreen', value?: number) => {
     send({ k: 'media', cmd, value });
     vibrate(10);
   };
+  const volume = media.muted ? 0 : media.volume;
+  const commitSeek = () => {
+    if (seeking !== null) send({ k: 'media', cmd: 'seek', value: seeking });
+    setSeeking(null);
+  };
   return (
     <div className="media-panel">
-      {linkBox}
+      <GesturePad media={media} />
+      <p className="gesture-help muted small">Chạm: phát / dừng · Chạm đúp trái / phải: ±10 giây · Vuốt ngang: tua · Vuốt dọc: âm lượng</p>
       <div className="media-title">{media.title}</div>
-      <div className="media-kind">{media.kind === 'video' ? 'Video' : 'Âm thanh'}</div>
       <input
         type="range"
         className="r-range"
@@ -555,14 +655,8 @@ export function MediaPanel({ sharedLink }: { sharedLink?: string | null }) {
         step={1}
         value={seeking ?? media.time}
         onChange={(e) => setSeeking(Number(e.target.value))}
-        onPointerUp={() => {
-          if (seeking !== null) send({ k: 'media', cmd: 'seek', value: seeking });
-          setSeeking(null);
-        }}
-        onTouchEnd={() => {
-          if (seeking !== null) send({ k: 'media', cmd: 'seek', value: seeking });
-          setSeeking(null);
-        }}
+        onPointerUp={commitSeek}
+        onTouchEnd={commitSeek}
       />
       <div className="media-time">
         <span>{formatDuration(seeking ?? media.time)}</span>
@@ -572,13 +666,13 @@ export function MediaPanel({ sharedLink }: { sharedLink?: string | null }) {
         <button className="r-btn icon big" aria-label="Trước" onClick={() => m('prev')}>
           <SkipBack />
         </button>
-        <button className="r-btn icon big" aria-label="Lùi 10 giây" onClick={() => send({ k: 'media', cmd: 'seek-by', value: -10 })}>
+        <button className="r-btn icon big" aria-label="Lùi 10 giây" onClick={() => send({ k: 'media', cmd: 'seek-by', value: -SEEK_STEP_S })}>
           <Rewind />
         </button>
         <button className="r-btn icon huge primary" aria-label="Phát/Dừng" onClick={() => m('toggle')}>
           {media.playing ? <Pause /> : <Play />}
         </button>
-        <button className="r-btn icon big" aria-label="Tiến 10 giây" onClick={() => send({ k: 'media', cmd: 'seek-by', value: 10 })}>
+        <button className="r-btn icon big" aria-label="Tiến 10 giây" onClick={() => send({ k: 'media', cmd: 'seek-by', value: SEEK_STEP_S })}>
           <FastForward />
         </button>
         <button className="r-btn icon big" aria-label="Tiếp" onClick={() => m('next')}>
@@ -586,19 +680,29 @@ export function MediaPanel({ sharedLink }: { sharedLink?: string | null }) {
         </button>
       </div>
       <div className="media-volume">
-        <button className="r-btn icon" aria-label="Tắt tiếng" onClick={() => m('mute')}>
+        <button className="r-btn icon" aria-label={media.muted ? 'Bật tiếng' : 'Tắt tiếng'} onClick={() => m('mute')}>
           {media.muted ? <VolumeX /> : <Volume2 />}
+        </button>
+        <button className="r-btn icon" aria-label="Giảm âm lượng" onClick={() => send({ k: 'media', cmd: 'volume', value: clamp(volume - VOLUME_STEP, 0, 1) })}>
+          <Minus />
         </button>
         <input
           type="range"
           className="r-range"
           min={0}
           max={100}
-          value={Math.round((media.muted ? 0 : media.volume) * 100)}
+          value={Math.round(volume * 100)}
           onChange={(e) => send({ k: 'media', cmd: 'volume', value: Number(e.target.value) / 100 })}
         />
+        <button className="r-btn icon" aria-label="Tăng âm lượng" onClick={() => send({ k: 'media', cmd: 'volume', value: clamp(volume + VOLUME_STEP, 0, 1) })}>
+          <Plus />
+        </button>
       </div>
+      <button className={`r-btn wide ${media.fullscreen ? 'on' : ''}`} onClick={() => m('fullscreen')}>
+        {media.fullscreen ? <Minimize /> : <Maximize />} {media.fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình trên TV'}
+      </button>
       <p className="muted small">Âm lượng ở đây là của trình phát TV WebOS; âm lượng hệ thống TV chỉ chỉnh được bằng remote của TV.</p>
+      {linkBox}
     </div>
   );
 }

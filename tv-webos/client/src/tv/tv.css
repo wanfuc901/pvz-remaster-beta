@@ -587,6 +587,27 @@ html[data-theme='light'] .wallpaper::after {
   border-radius: 0;
   border: 0;
 }
+/* Full-screen player: edge to edge, no title bar, taskbar or overscan margin. Overlays still open on top. */
+.desktop.immersive .safe-area {
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+.desktop.immersive .work-area {
+  bottom: 0;
+}
+.desktop.immersive .taskbar {
+  display: none;
+}
+.window.fullscreen {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+.window.fullscreen .window-titlebar {
+  display: none;
+}
 .window.minimized {
   visibility: hidden;
   opacity: 0;

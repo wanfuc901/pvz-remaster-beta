@@ -261,6 +261,35 @@ function takeSharedLink(): string | null {
   return firstHttpUrl(SHARE_PARAMS.map((p) => params.get(p) ?? '').join(' '));
 }
 
+/**
+ * Keep the phone screen on while it is used as a remote. The OS drops the lock whenever the page is
+ * hidden, so it is requested again on return. Unsupported (older iOS) or refused (battery saver): the
+ * screen simply dims as usual.
+ */
+function useScreenWakeLock(active: boolean): void {
+  useEffect(() => {
+    if (!active || !('wakeLock' in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let stopped = false;
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible' || (lock && !lock.released)) return;
+      try {
+        lock = await navigator.wakeLock.request('screen');
+        if (stopped) void lock.release();
+      } catch {
+        // Refused, see above.
+      }
+    };
+    void acquire();
+    document.addEventListener('visibilitychange', acquire);
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', acquire);
+      if (lock && !lock.released) void lock.release();
+    };
+  }, [active]);
+}
+
 export function RemoteApp() {
   const phase = useRemote((s) => s.phase);
   const text = useRemote((s) => s.tv?.text ?? null);
@@ -270,6 +299,7 @@ export function RemoteApp() {
   const [tab, setTab] = useState<Tab>(() => (sharedLink ? 'media' : (local.get('tvwebos.remote.tab') as Tab) || 'touch'));
   const [menu, setMenu] = useState(false);
   const prevTab = useRef<Tab | null>(null);
+  useScreenWakeLock(phase === 'paired');
 
   useEffect(() => {
     startRemote();

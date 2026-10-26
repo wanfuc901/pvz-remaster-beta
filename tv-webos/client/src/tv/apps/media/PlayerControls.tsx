@@ -4,12 +4,13 @@
  * one `command` callback, the same entry point phone remotes use, so all inputs behave alike.
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { FastForward, Pause, Play, Rewind, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import type { MediaCommand } from '@tvwebos/shared/constants';
 import type { TvMediaState } from '@tvwebos/shared';
 import { clamp, formatDuration } from '../../../common/format';
 import { emitMediaChange, registerMedia } from '../../os/bus';
 import { navKeyOf } from '../../os/keys';
+import { os, useOs } from '../../os/store';
 
 export const SEEK_STEP_S = 10;
 const FAST_STEP_S = 30;
@@ -85,6 +86,11 @@ export function useMediaController(windowId: string, state: TvMediaState | null,
     [windowId],
   );
 
+  // Changes that come from outside the media element (Back leaving full screen, a new thumbnail).
+  useEffect(() => {
+    emitMediaChange();
+  }, [state?.fullscreen, state?.art, state?.title]);
+
   return {
     publish(time: number, force: boolean) {
       if (!force && Math.abs(time - lastTime.current) < TIME_PUBLISH_STEP_S) return;
@@ -92,6 +98,33 @@ export function useMediaController(windowId: string, state: TvMediaState | null,
       emitMediaChange();
     },
   };
+}
+
+/** Browsers grant the Fullscreen API only during a key press or click on the TV itself. */
+function requestPageFullscreen(): void {
+  const el = document.documentElement;
+  if (document.fullscreenElement || typeof el.requestFullscreen !== 'function') return;
+  try {
+    // Older TV engines return undefined instead of a promise.
+    void Promise.resolve(el.requestFullscreen()).catch(() => {
+      // Refused when the command came from the phone; the OS-level full screen below still applies.
+    });
+  } catch {
+    // Same as above on engines that throw synchronously.
+  }
+}
+
+/**
+ * Full screen for a player window: the shell drops the title bar, taskbar and overscan margin. In a plain
+ * browser tab the page also asks the browser to go full screen (see requestPageFullscreen).
+ */
+export function useWindowFullscreen(windowId: string) {
+  const fullscreen = useOs((s) => s.fullscreenId === windowId);
+  const set = (on: boolean) => {
+    os.get().setFullscreen(on ? windowId : null);
+    if (on) requestPageFullscreen();
+  };
+  return { fullscreen, set, toggle: () => set(os.get().fullscreenId !== windowId) };
 }
 
 const MEDIA_KEYS: Partial<Record<string, [MediaCommand, number?]>> = {
@@ -153,12 +186,13 @@ interface PlayerControlsProps {
   hidden: boolean;
   /** Removed from D-pad navigation while an overlay (playlist) owns focus. */
   navHidden?: boolean;
+  fullscreen: boolean;
   command: MediaCommandFn;
-  /** App-specific buttons shown after mute. */
+  /** App-specific buttons shown after full screen. */
   extra?: ReactNode;
 }
 
-export function PlayerControls({ title, playback, active, canStep, hidden, navHidden, command, extra }: PlayerControlsProps) {
+export function PlayerControls({ title, playback, active, canStep, hidden, navHidden, fullscreen, command, extra }: PlayerControlsProps) {
   return (
     <div className={`player-controls ${hidden ? 'hidden' : ''}`} data-nav-scope {...(navHidden ? { 'data-nav-hidden': '' } : {})}>
       <div className="player-title">{title}</div>
@@ -187,6 +221,9 @@ export function PlayerControls({ title, playback, active, canStep, hidden, navHi
         <div className="player-buttons">
           <button className="p-btn" onClick={() => command('mute')} title={playback.muted ? 'Bật tiếng' : 'Tắt tiếng'} disabled={!active}>
             {playback.muted ? <VolumeX /> : <Volume2 />}
+          </button>
+          <button className="p-btn" onClick={() => command('fullscreen')} title={fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}>
+            {fullscreen ? <Minimize /> : <Maximize />}
           </button>
           {extra}
         </div>

@@ -65,8 +65,11 @@ export interface OsState {
   pinned: string[];
   /** Cursor visibility (hidden after inactivity or when the Magic Remote takes over). */
   cursorVisible: boolean;
+  /** Window shown edge to edge without its title bar, the taskbar or the overscan margin (video players). */
+  fullscreenId: string | null;
 
   // ---- windows ----
+  setFullscreen: (id: string | null) => void;
   openWindow: (appId: string, opts: { title: string; args?: Record<string, unknown>; bounds?: Bounds; maximized?: boolean }) => string;
   closeWindow: (id: string) => void;
   focusWindow: (id: string | null) => void;
@@ -134,6 +137,9 @@ export const useOs = create<OsState>((set, get) => ({
   tvApps: [],
   pinned: local.getJson<string[]>('tvwebos.pinned', ['files', 'media', 'youtube', 'gallery', 'browser', 'store', 'settings']),
   cursorVisible: false,
+  fullscreenId: null,
+
+  setFullscreen: (id) => set({ fullscreenId: id }),
 
   openWindow: (appId, opts) => {
     const id = uid();
@@ -163,7 +169,7 @@ export const useOs = create<OsState>((set, get) => ({
         const next = windows.filter((w) => w.mode !== 'minimized').sort((a, b) => b.z - a.z)[0];
         focusedId = next ? next.id : null;
       }
-      return { windows, focusedId };
+      return { windows, focusedId, fullscreenId: s.fullscreenId === id ? null : s.fullscreenId };
     }),
 
   focusWindow: (id) =>
@@ -187,7 +193,7 @@ export const useOs = create<OsState>((set, get) => ({
         const next = windows.filter((w) => w.mode !== 'minimized').sort((a, b) => b.z - a.z)[0];
         focusedId = next ? next.id : null;
       }
-      return { windows, focusedId };
+      return { windows, focusedId, fullscreenId: s.fullscreenId === id ? null : s.fullscreenId };
     }),
 
   toggleMaximize: (id) =>

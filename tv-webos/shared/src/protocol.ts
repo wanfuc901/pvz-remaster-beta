@@ -95,6 +95,10 @@ const MediaStateSchema = z.object({
   duration: finite,
   volume: finite,
   muted: z.boolean(),
+  /** Thumbnail URL (e.g. YouTube's) the remote shows next to the controls. */
+  art: z.string().max(512).optional(),
+  /** The player fills the whole screen (no window chrome or taskbar). */
+  fullscreen: z.boolean().optional(),
 });
 
 /** Snapshot of the TV shell that remotes mirror. */
